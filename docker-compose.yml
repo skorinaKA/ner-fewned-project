@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  ner-training:
+    build: .
+    container_name: ner-system
+    volumes:
+      - ./results:/app/results
+      - ./models:/app/models
+      - ./data:/app/data
+    environment:
+      - CUDA_VISIBLE_DEVICES=0  # Для использования GPU, если доступно
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: python run.py --epochs 3 --batch_size 16 --workers 4
+    
+  ner-api:
+    build: .
+    container_name: ner-api
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./models:/app/models
+      - ./results:/app/results
+    command: python app.py
+    depends_on:
+      - ner-training
+
+  jupyter:
+    build: .
+    container_name: ner-jupyter
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./notebooks:/app/notebooks
+      - ./results:/app/results
+    command: jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token=''

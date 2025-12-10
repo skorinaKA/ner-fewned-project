@@ -1,0 +1,28 @@
+# Конфигурация NER системы
+training:
+  epochs: 3
+  batch_size: 32
+  learning_rate: 2e-5
+  max_length: 128
+  max_samples: 10000
+
+model:
+  name: "bert-base-uncased"
+  dropout: 0.1
+  use_crf: false
+
+data:
+  dataset: "DFKI-SLT/few-nerd"
+  split: "supervised"
+  cache_dir: "/app/data/cache"
+
+paths:
+  data_dir: "/app/data"
+  results_dir: "/app/results"
+  model_dir: "/app/models"
+
+docker:
+  gpu: true
+  workers: 4
+  memory: "8g"
+  shm_size: "2g"
