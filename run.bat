@@ -1,21 +1,12 @@
 @echo off
 
-REM Установка зависимостей
-pip install -r requirements.txt
+echo Установка зависимостей...
+pip install torch transformers datasets seqeval numpy tqdm matplotlib
 
-REM Создание директории для результатов
-if not exist results mkdir results
+echo Запуск минимальной версии...
+python simple_ner_minimal.py
 
-REM Запуск с параметрами по умолчанию
-echo Запуск с параметрами по умолчанию...
-python main.py
-
-REM Запуск в режиме отладки
-REM echo Запуск в режиме отладки...
-REM python main.py --debug --epochs 1 --batch_size 8
-
-REM Запуск с другими параметрами
-REM echo Запуск с увеличенным количеством эпох...
-REM python main.py --epochs 5 --batch_size 32 --lr 3e-5
+echo Запуск полной версии...
+python ner_system_fixed.py --debug --epochs 2 --batch_size 16 --workers 4
 
 pause
