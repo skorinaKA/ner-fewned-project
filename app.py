@@ -4,53 +4,46 @@
 
 from flask import Flask, request, jsonify, render_template
 import torch
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, AutoModelForTokenClassification
+from transformers import pipeline
 import json
 import os
-from ner_system import SimpleBertForNER
-import numpy as np
 
 app = Flask(__name__)
 
-# Загрузка модели
-MODEL_PATH = "/app/models/best_model"
-TAGS_PATH = "/app/models/tags.json"
+# Используем предобученную NER модель
+MODEL_NAME = "dslim/bert-base-NER"  # или "dbmdz/bert-large-cased-finetuned-conll03-english"
 
 def load_model():
-    """Загрузка модели и токенизатора"""
-    if not os.path.exists(MODEL_PATH):
-        return None, None, None
-    
+    """Загрузка предобученной NER модели"""
     try:
-        # Загружаем информацию о тегах
-        with open(TAGS_PATH, 'r') as f:
-            tag_info = json.load(f)
-            id2tag = tag_info['id2tag']
-            tag2id = tag_info['tag2id']
+        # Загружаем модель и токенизатор
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+        model = AutoModelForTokenClassification.from_pretrained(MODEL_NAME)
         
-        # Загружаем токенизатор
-        tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
+        # Создаем pipeline для удобства
+        nlp_pipeline = pipeline("ner", model=model, tokenizer=tokenizer, aggregation_strategy="simple")
         
-        # Загружаем модель
-        model = SimpleBertForNER(
-            model_name="bert-base-uncased",
-            num_tags=len(id2tag)
-        )
+        # Получаем id2tag из модели
+        id2tag = model.config.id2label
         
-        # Загружаем веса
-        weights_path = os.path.join(MODEL_PATH, "model_weights.pth")
-        if os.path.exists(weights_path):
-            model.load_state_dict(torch.load(weights_path, map_location='cpu'))
-        
-        model.eval()
-        
-        return model, tokenizer, id2tag
+        return model, tokenizer, nlp_pipeline, id2tag
     
     except Exception as e:
         print(f"Ошибка загрузки модели: {e}")
-        return None, None, None
+        # Fallback на локальную модель
+        try:
+            tokenizer = AutoTokenizer.from_pretrained("/app/models/bert-base-uncased")
+            # Создаем простую модель (для демонстрации)
+            model = AutoModelForTokenClassification.from_pretrained(
+                "/app/models/bert-base-uncased",
+                num_labels=9
+            )
+            return model, tokenizer, None, None
+        except:
+            return None, None, None, None
 
-model, tokenizer, id2tag = load_model()
+model, tokenizer, nlp_pipeline, id2tag = load_model()
 
 @app.route('/')
 def index():
@@ -63,6 +56,7 @@ def health_check():
     status = {
         'status': 'healthy' if model is not None else 'no_model',
         'model_loaded': model is not None,
+        'model_name': MODEL_NAME,
         'gpu_available': torch.cuda.is_available()
     }
     return jsonify(status)
@@ -80,7 +74,27 @@ def predict():
         if model is None:
             return jsonify({'error': 'Model not loaded'}), 503
         
-        # Токенизация
+        # Если есть pipeline, используем его
+        if nlp_pipeline:
+            entities = nlp_pipeline(text)
+            
+            # Форматируем результат
+            formatted_entities = []
+            for entity in entities:
+                formatted_entities.append({
+                    'text': entity['word'],
+                    'entity': entity['entity_group'],
+                    'start': entity['start'],
+                    'end': entity['end'],
+                    'score': float(entity['score'])
+                })
+            
+            return jsonify({
+                'text': text,
+                'entities': formatted_entities
+            })
+        
+        # Альтернативный способ без pipeline
         tokens = text.split()
         encoding = tokenizer(
             tokens,
@@ -93,8 +107,8 @@ def predict():
         
         # Предсказание
         with torch.no_grad():
-            logits = model(encoding['input_ids'], encoding['attention_mask'])
-            predictions = torch.argmax(logits, dim=-1)[0].cpu().numpy()
+            outputs = model(**encoding)
+            predictions = torch.argmax(outputs.logits, dim=-1)[0].cpu().numpy()
         
         # Обработка результатов
         word_ids = encoding.word_ids()
@@ -106,7 +120,11 @@ def predict():
                 continue
             if word_idx != previous_word_idx:
                 tag_id = predictions[i]
-                tag = id2tag[str(tag_id)] if str(tag_id) in id2tag else 'O'
+                if id2tag:
+                    tag = id2tag[tag_id] if tag_id in id2tag else 'O'
+                else:
+                    tag = f"TAG-{tag_id}"
+                
                 if tag != 'O':
                     entities.append({
                         'word': tokens[word_idx],
@@ -148,15 +166,6 @@ def predict():
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-@app.route('/api/train', methods=['POST'])
-def train_model():
-    """API для запуска обучения"""
-    # В реальном приложении здесь будет асинхронный запуск обучения
-    return jsonify({
-        'message': 'Training started',
-        'status': 'processing'
-    })
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
