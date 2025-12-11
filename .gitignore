@@ -1,3 +1,8 @@
-
+notebooks/*
 ner_results/*
-*/*
+models/*
+data/*
+data_cache/*
+__pycache__/*
+parallel_results/*
+results/*

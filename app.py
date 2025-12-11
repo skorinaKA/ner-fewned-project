@@ -9,7 +9,7 @@ from transformers import pipeline
 import json
 import os
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='templates')  # Указываем папку с шаблонами
 
 # Используем предобученную NER модель
 MODEL_NAME = "dslim/bert-base-NER"  # или "dbmdz/bert-large-cased-finetuned-conll03-english"
