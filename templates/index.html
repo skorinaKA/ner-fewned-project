@@ -299,6 +299,7 @@
     </div>
 
     <script>
+        console.log('NER System initialized');
         // Update character and word counts
         function updateCounts() {
             const text = document.getElementById('inputText').value;
@@ -311,16 +312,25 @@
             try {
                 const response = await fetch('/health');
                 const data = await response.json();
+                console.log('Health check response:', data);
                 
-                document.getElementById('status').textContent = 
-                    data.status === 'healthy' ? '✅ System Ready' : '⚠️ ' + data.status;
+                const statusElement = document.getElementById('status');
+                if (statusElement) {
+                    statusElement.textContent = 
+                        data.status === 'healthy' ? '✅ System Ready' : '⚠️ ' + data.status;
+                }
+                
                 document.getElementById('modelName').textContent = data.model_name || 'Unknown';
                 document.getElementById('gpuStatus').textContent = 
                     data.gpu_available ? 'Available' : 'Not Available';
                 
                 return data.status === 'healthy';
             } catch (error) {
-                document.getElementById('status').textContent = '❌ API Error';
+                console.error('Health check failed:', error);
+                const statusElement = document.getElementById('status');
+                if (statusElement) {
+                    statusElement.textContent = '❌ API Error';
+                }
                 return false;
             }
         }
@@ -335,9 +345,10 @@
 
             const loading = document.getElementById('loading');
             const result = document.getElementById('result');
+            const entitiesList = document.getElementById('entitiesList');
             
             loading.style.display = 'block';
-            result.innerHTML = '';
+            result.innerHTML = '<div id="dynamicContent"></div>';
 
             try {
                 const response = await fetch('/api/predict', {
@@ -351,7 +362,8 @@
                 const data = await response.json();
                 
                 if (data.error) {
-                    result.innerHTML = `<p style="color: #f44336;">Error: ${data.error}</p>`;
+                    document.getElementById('dynamicContent').innerHTML = 
+                        `<p style="color: #f44336;">Error: ${data.error}</p>`;
                     return;
                 }
 
@@ -364,24 +376,29 @@
                 
                 entities.forEach(entity => {
                     const start = entity.start || 0;
-                    const end = entity.end || entity.text.length;
+                    const end = entity.end || (entity.text ? entity.text.length : 0);
                     const entityClass = `highlight entity-${entity.entity}`;
                     
-                    highlightedText = 
-                        highlightedText.substring(0, start) +
-                        `<span class="highlight ${entityClass}" title="${entity.entity} (${(entity.score * 100).toFixed(1)}%)">` +
-                        highlightedText.substring(start, end) +
-                        '</span>' +
-                        highlightedText.substring(end);
+                    if (start < highlightedText.length && end <= highlightedText.length) {
+                        highlightedText = 
+                            highlightedText.substring(0, start) +
+                            `<span class="highlight ${entityClass}" title="${entity.entity} (${(entity.score * 100).toFixed(1)}%)">` +
+                            highlightedText.substring(start, end) +
+                            '</span>' +
+                            highlightedText.substring(end);
+                    }
                 });
 
-                result.innerHTML = `<p><strong>Original Text with Entities Highlighted:</strong></p>
-                                   <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
-                                       ${highlightedText.replace(/\n/g, '<br>')}
-                                   </div>`;
+                document.getElementById('dynamicContent').innerHTML = 
+                    `<p><strong>Original Text with Entities Highlighted:</strong></p>
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                        ${highlightedText.replace(/\n/g, '<br>')}
+                    </div>`;
 
                 // Display entities list
-                const entitiesList = document.getElementById('entitiesList');
+                const newEntitiesList = document.createElement('div');
+                newEntitiesList.id = 'entitiesList';
+                
                 if (entities.length > 0) {
                     let entitiesHTML = '<p><strong>Detected Entities:</strong></p>';
                     
@@ -391,7 +408,7 @@
                         const type = entity.entity || 'UNKNOWN';
                         if (!grouped[type]) grouped[type] = [];
                         grouped[type].push({
-                            text: entity.text || entity.word,
+                            text: entity.text || entity.word || '',
                             score: entity.score ? (entity.score * 100).toFixed(1) + '%' : 'N/A'
                         });
                     });
@@ -408,15 +425,20 @@
                         entitiesHTML += '</ul></div>';
                     }
                     
-                    entitiesList.innerHTML = entitiesHTML;
+                    newEntitiesList.innerHTML = entitiesHTML;
                     document.getElementById('entityCount').textContent = entities.length;
                 } else {
-                    entitiesList.innerHTML = '<p>No entities detected.</p>';
+                    newEntitiesList.innerHTML = '<p>No entities detected.</p>';
                     document.getElementById('entityCount').textContent = '0';
                 }
 
+                result.appendChild(newEntitiesList);
+                console.log('API Response:', data);
+
             } catch (error) {
-                result.innerHTML = `<p style="color: #f44336;">Error: ${error.message}</p>`;
+                document.getElementById('dynamicContent').innerHTML = 
+                    `<p style="color: #f44336;">Error: ${error.message}</p>`;
+                console.error('API Error:', error);
             } finally {
                 loading.style.display = 'none';
             }
