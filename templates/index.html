@@ -325,6 +325,7 @@
                     data.gpu_available ? 'Available' : 'Not Available';
                 
                 return data.status === 'healthy';
+                console.log('API Response:', data);
             } catch (error) {
                 console.error('Health check failed:', error);
                 const statusElement = document.getElementById('status');
@@ -433,7 +434,6 @@
                 }
 
                 result.appendChild(newEntitiesList);
-                console.log('API Response:', data);
 
             } catch (error) {
                 document.getElementById('dynamicContent').innerHTML = 
